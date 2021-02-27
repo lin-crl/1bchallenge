@@ -10,11 +10,11 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 import psycopg2
 from psycopg2.errors import SerializationFailure
 
-def insert_ref(conn, k):
+def upsert_ref(conn, k):
     with conn.cursor() as cur:
-        cur.execute("insert into ref (select key, random() from fact, generate_series(1, 1000) where key =%s);" %k )
-        logging.info("inserted fact key  =%s ", k)
-        logging.debug("insert: status message: %s", cur.statusmessage)
+        cur.execute("upsert into ref (select key, random() from fact, generate_series(1, 1000) where key =%s);" %k )
+        logging.info("upserted fact key  =%s ", k)
+        logging.debug("upsert: status message: %s", cur.statusmessage)
         conn.commit()
 
 def main():
@@ -24,7 +24,7 @@ def main():
 
     conn = psycopg2.connect(opt.dsn)
 
-
+    # print_balances(conn)
     for i in range(1, 1000001):
         n = 0
         while True:
@@ -32,7 +32,7 @@ def main():
             if (n == 10):
                 raise Exception("did not succeed within 10 retries")
             try:
-                insert_ref(conn, i)
+                upsert_ref(conn, i)
                 break
             # The function below is used to test the transaction retry logic.  It
             # can be deleted from production code.
@@ -42,12 +42,12 @@ def main():
             # run (and run, and run...).  In real code you should handle this error
             # and any others thrown by the database interaction.
                 if ve.code != "40001":
-                    print ve
                     raise ve
                 else:
+                    print(ve, n)
                     conn.execute('ROLLBACK;')
                     sleep(int(((2**n) * 100) + rand( 100 - 1 ) + 1))
-                logging.debug("run_transaction(conn, ) failed: %s", i)
+                    logging.debug("run_transaction(conn, ) failed: %s", i)
 
     # Close communication with the database.
     conn.close()
@@ -59,7 +59,7 @@ def parse_cmdline():
     parser.add_argument(
         "dsn",
         help="database connection string\n\n"
-             "For cockroach demo, use postgresql://root@localhost:26257/defaultdb?sslmode=disable,\n"
+             "For cockroach insecure cluster, use postgresql://root@127.0.0.1:26257/defaultdb?sslmode=disable,\n"
     )
 
     parser.add_argument("-v", "--verbose",
